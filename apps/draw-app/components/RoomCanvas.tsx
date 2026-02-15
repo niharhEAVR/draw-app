@@ -1,59 +1,124 @@
 "use client"
 
-import { redirect } from "next/navigation";
-import { useWindowSize } from "usehooks-ts"; // Library for accessing the window's width and height
+import { useWindowSize } from "usehooks-ts";
 import { useState, useEffect } from "react";
-import { WS_URL, DEMO_TOKEN } from "@/config";
-import { Canvas } from "./Canvas";
-import { Button } from "./Button";
 
-export function RoomCanvas({ roomId }: { roomId: string }) {
+import { WS_URL } from "@/config";
+import { Canvas } from "./Canvas";
+
+export function RoomCanvas({ roomId }: { roomId: string })
+{
+
+    // 📏 Get live window size for full-screen canvas
     const { width, height } = useWindowSize();
 
+    // 🔌 WebSocket state
     const [socket, setSocket] = useState<WebSocket | null>(null);
-    const [clearCanvas, setClearCanvas] = useState<boolean>(false)
 
+    // 👑 Example admin flag (replace with real logic from backend)
+    const [isAdmin, setIsAdmin] = useState(false);
 
+    /**
+     * 🔹 Establish WebSocket connection when roomId changes
+     */
     useEffect(() => {
-        const ws = new WebSocket(`${WS_URL}?token=${DEMO_TOKEN}`);
+
+        const ws = new WebSocket(`${WS_URL}?token=${localStorage.getItem("token")}`);
 
         ws.onopen = () => {
+
+            console.log("WebSocket Connected");
+
+            // Save socket
             setSocket(ws);
-            const data = JSON.stringify({ type: "join_room", roomId });
-            console.log("Sending:", data);
-            ws.send(data);
+
+            // Join the room after connection
+            ws.send(JSON.stringify({
+                type: "join_room",
+                roomId: parseInt(roomId)
+            }));
+        };
+
+        ws.onmessage = (event) => {
+            const data = JSON.parse(event.data);
+
+            // Example: server sends admin status
+            if (data.type === "admin_status") {
+                setIsAdmin(data.isAdmin);
+            }
+            console.log(data);
+            
         };
 
         ws.onclose = () => {
+            ws.send(JSON.stringify({
+                type: "leave_room",
+                roomId: parseInt(roomId)
+            }));
             console.log("WebSocket Closed");
         };
+
+        // Cleanup on unmount
         return () => {
             ws.close();
         };
+
     }, [roomId]);
 
+    /**
+     * 🔹 Clear canvas handler
+     * This should be triggered only by button click,
+     * NOT inside render.
+     */
+    const handleClearCanvas = () => {
+
+        if (!socket) return;
+
+        socket.send(JSON.stringify({
+            type: "clearCanvas",
+            roomId: parseInt(roomId)
+        }));
+
+        console.log("Clear canvas requested");
+    };
+
+    /**
+     * 🔹 If socket not ready
+     */
     if (!socket) {
-        return <div>Connecting to Server...</div>;
-    }
-
-    if (clearCanvas) {
-
-        socket.send(
-            JSON.stringify({
-                type: "clearCanvas",
-                roomId
-            })
+        return (
+            <div className="flex items-center justify-center h-screen bg-gray-900 text-white text-xl">
+                Connecting to Server...
+            </div>
         );
-        setClearCanvas(false)
-        console.log(clearCanvas);
-        redirect("/canvas/1")
     }
 
+    return (
+        <div className="bg-[#121212] h-screen w-screen overflow-hidden relative">
 
-    return (<>
-        <div className="bg-gray-900 h-screen overflow-hidden">
-            <Canvas roomId={roomId} socket={socket} width={width} height={height} />
-            <div className="fixed bottom-4 right-16"><Button onClick={() => { setClearCanvas(!clearCanvas) }} activated={false} icon={"Clear Canvas"} /> {/*make this button as admin specific that only admind can see this button and click its*/}</div>
+            {/* 🖌️ Main Canvas */}
+            <Canvas
+                roomId={roomId}
+                socket={socket}
+                width={width}
+                height={height}
+            />
+
+            {/* 👑 Admin Only Clear Button (Bottom Right like Excalidraw) */}
+            {isAdmin && (
+                <div className="fixed bottom-6 right-6">
+                    <button
+                        onClick={handleClearCanvas}
+                        className="bg-red-600 hover:bg-red-700 
+                                   text-white px-4 py-2 
+                                   rounded-lg shadow-lg 
+                                   transition-all duration-200"
+                    >
+                        Clear Canvas
+                    </button>
+                </div>
+            )}
+
         </div>
-    </>)
+    );
 }

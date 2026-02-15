@@ -1,73 +1,121 @@
-
 import { useEffect, useRef, useState } from "react";
-import { initDraw, removeDrawListeners } from "@/draw";
-import { Pencil } from "lucide-react";
-import { Button } from "./Button";
-import { Game } from "@/draw/Game";
+import { Pencil, RectangleHorizontal, Circle } from "lucide-react";
+import { Game } from "../draw/game";
 
 export type Tool = "circle" | "rect" | "pencil";
 
-export function Canvas({ roomId, socket, width, height }: { roomId: string; socket: WebSocket, width: number | undefined, height: number | undefined }) {
+export function Canvas({
+    roomId,
+    socket,
+    width,
+    height
+}: {
+    roomId: string;
+    socket: WebSocket;
+    width: number | undefined;
+    height: number | undefined;
+}) {
 
     const canvasRef = useRef<HTMLCanvasElement>(null);
 
-    const [activeTool, setActiveTool] = useState<string | null>(null);
+    // ✅ Single source of truth for tool
     const [selectedTool, setSelectedTool] = useState<Tool>("circle");
 
+    const [game, setGame] = useState<Game | null>(null);
 
-    const [game, setGame] = useState<Game>();
-
+    /**
+     * 🎮 Initialize Game when canvas + socket + roomId ready
+     */
     useEffect(() => {
-        game?.setTool(selectedTool);
+
+        if (!canvasRef.current) return;
+
+        const g = new Game(canvasRef.current, roomId, socket);
+        setGame(g);
+
+        return () => {
+            g.destroy();
+        };
+
+    }, [roomId, socket]); // ✅ Correct dependencies
+
+
+    /**
+     * 🔄 Update tool inside Game when selectedTool changes
+     */
+    useEffect(() => {
+        if (game) {
+            game.setTool(selectedTool);
+        }
     }, [selectedTool, game]);
 
 
 
-    useEffect(() => {
-        if (canvasRef.current) {
-            const g = new Game(canvasRef.current, roomId, socket);
-            setGame(g);
+    return (
+        <>
+            <canvas
+                ref={canvasRef}
+                className="bg-[#1e1e1e]"
+                width={width}
+                height={height}
+            />
 
-            return () => {
-                g.destroy();
-            }
-        }
-    }, [canvasRef]);
-
-
-    return (<>
-        <canvas
-            ref={canvasRef}
-            className="border-2 border-gray-700 rounded-lg shadow-lg"
-            width={width}
-            height={height}
-        />
-        <ButtonBar activeTool={activeTool} setActiveTool={setActiveTool} />
-    </>
+            <ButtonBar
+                selectedTool={selectedTool}
+                setSelectedTool={setSelectedTool}
+            />
+        </>
     );
 }
 
 
-function ButtonBar({ activeTool, setActiveTool }: {
-    activeTool: string | null,
-    setActiveTool: React.Dispatch<React.SetStateAction<string | null>>
+function ButtonBar({
+    selectedTool,
+    setSelectedTool
+}: {
+    selectedTool: Tool;
+    setSelectedTool: React.Dispatch<React.SetStateAction<Tool>>;
 }) {
 
-    return (<>
-        <div className="fixed top-4 left-4 flex gap-2 text-xl">
-            {["Text", "Circle", "Rectangle"].map((tool) => (
+    return (
+        <>
+            {/* Top Left Tools */}
+            <div className="fixed top-4 left-4 flex gap-3">
+
                 <button
-                    key={tool}
-                    className={`rounded-4xl p-2 ${activeTool === tool ? "bg-green-300 text-black" : "bg-white text-black hover:bg-gray-300"
-                        }`}
-                    onClick={() => setActiveTool((prev) => (prev === tool ? null : tool))}
-                >{tool}</button>
-            ))}
-        </div>
-        <div className="fixed bottom-4 right-4 text-xl">
-            <Button onClick={() => {
-                setActiveTool((prev) => (prev === "pencil" ? null : "pencil"))
-            }} activated={activeTool === "pencil"} icon={<Pencil />} />
-        </div>
-    </>)
+                    className={`px-3 py-2 rounded-full ${
+                        selectedTool === "circle"
+                            ? "text-red-700 bg-white"
+                            : "bg-white text-black hover:bg-gray-200"
+                    }`}
+                    onClick={() => setSelectedTool("circle")}
+                >
+                    <Circle />
+                </button>
+
+                <button
+                    className={`px-3 py-2 rounded-full ${
+                        selectedTool === "rect"
+                            ? "text-red-700 bg-white"
+                            : "bg-white text-black hover:bg-gray-200"
+                    }`}
+                    onClick={() => setSelectedTool("rect")}
+                >
+                    <RectangleHorizontal />
+                </button>
+
+                <button
+                    className={`px-3 py-2 rounded-full ${
+                        selectedTool === "pencil"
+                            ? "text-red-700 bg-white"
+                            : "bg-white text-black hover:bg-gray-200"
+                    }`}
+                    onClick={() => setSelectedTool("pencil")}
+                >
+                    <Pencil />
+                </button>
+            </div>
+
+        </>
+    );
 }
